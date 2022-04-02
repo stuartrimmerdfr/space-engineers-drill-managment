@@ -1,0 +1,353 @@
+	//	START  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		///  program space engineers DRILL stats             list contents of drill over time and emergancey shut down
+		/// added slow down when hit gold uranium platinum silver 
+		/// 
+		public Program()
+		{
+
+		}
+
+
+
+		String buse = "RS";    ///   the base name for pistans and drills
+		public string searchname = "";
+		
+		int top = 0;
+		int drilcounter = 0;
+		int sittchtim = 60;
+		float countc = 0;
+		float capc = 0;
+		float fullc = 0;
+		float capcarg = 0;
+		float fullcarg = 0;
+		float emergency = 0;
+
+
+		public float[,] amm = new float[8, 200];
+		public float[] totals = new float[8];
+		public string[] orename = new string[8];
+
+
+		public string tform = "{0,-10}  {1,13:N}";
+
+		public string ttx = "";
+
+		public void Main(string argument, UpdateType updateSource)
+		{
+			pistonspeed(0.1f);
+
+			var drills = new List<IMyShipDrill>(); GridTerminalSystem.GetBlocksOfType<IMyShipDrill>(drills);
+			var cargo = new List<IMyCargoContainer>(); GridTerminalSystem.GetBlocksOfType<IMyCargoContainer>(cargo);
+
+			printsc("  [" + DateTime.Now.ToString("dd:MM:yyyy hh:mm:s") + "]\n\r ", false);
+			int t = 0;
+			if (cargo.Count > 0) t = cargo.Count - 1;
+
+			int noofdrills = 0;
+			for (int qq = 0; qq < drills.Count; qq++)
+			{
+				string drill = drills[qq].DisplayNameText;
+				if (drill.Contains(buse))
+				{
+
+					noofdrills++;
+
+					int ilo = drills[qq].GetInventory(0).ItemCount - 1;
+					for (int ici = ilo; ici > -1; ici--)
+					{
+
+						string nam = drills[qq].GetInventory(0).GetItemAt(ici).Value.Type.SubtypeId; /// stock name
+						var itmamm = drills[qq].GetInventory(0).GetItemAt(ici).Value.Amount;
+						var itmval = drills[qq].GetInventory(0).GetItemAt(ici).Value;
+						var itmtyp = drills[qq].GetInventory(0).GetItemAt(ici).Value.Type;
+						var frmcont = drills[qq].GetInventory(0);
+						var frmcontn = drills[qq].DisplayNameText;
+						bool fond = false;
+
+						if (nam.Contains("Gold") || nam.Contains("Plati") || nam.Contains("Ura") || nam.Contains("Silv"))
+                        {
+							pistonspeed(0.002f);
+                        }
+						
+						if (nam.Contains("Cobal") || nam.Contains("Magnes"))
+						{
+							pistonspeed(0.04f);
+						}
+						if (itmamm > 0)
+						{
+
+							for (int q = 0; q < top; q++)
+							{
+								if (nam == orename[q])
+								{
+									amm[q, (int)capc] = amm[q, (int)capc] + (float)(itmamm);
+									fond = true;
+								}
+							}
+							if (fond == false)
+							{
+								orename[top] = nam;
+								amm[top, (int)capc] = amm[top, (int)capc] + (float)(itmamm);
+								top++;
+
+							}
+							// put in container
+							var tocont = cargo[t].GetInventory(0);
+							if (tocont.CanItemsBeAdded(itmamm, itmtyp))
+							{
+								bool yes = frmcont.TransferItemTo(tocont, itmval);
+								Echo(drills[qq].DisplayNameText + "   " + nam + "  ");
+							}
+                            else
+                            {
+								t--;
+								if (t < 0) t = cargo.Count - 1;
+							}
+						}
+
+					}
+				}
+			}
+
+			printsc("Drill Head Position ", true);
+
+			pistonsfull();
+			continersfull();
+			string textpis = "";
+			 
+
+			textpis = textpis + string.Format("{0,-5:N}", capc) + " Meters ";
+			textpis = textpis + prtlinperc((int)fullc, (int)capc);
+			textpis = textpis + fullc + " Meters Max     ";
+			textpis = textpis +  " Containers ";
+			textpis = textpis + prtlinperc((int)fullcarg, (int)capcarg);
+
+			textpis = textpis + "\n\r\n\r";
+			printsc(textpis, true);
+			int topline = 0;
+			int botline = (int)fullc;
+			if(capc > 45)
+            {
+//				botline = (int)capc+6;
+				topline = (int)capc - 45;
+            }
+			
+			ttx = "";
+			for (int q = topline; q< botline; q++)
+            {
+				string textgra = "";
+				if (q < (int)capc)
+                {
+					textgra =  "     |{}|  ";
+                }
+				if (q == (int)capc)
+				{
+					textgra =  "    YY" + string.Format("{0,-2}", noofdrills) + "YY ";
+
+				}
+				if (q > (int)capc)
+				{
+					textgra =  "           ";
+
+				}
+				string txth = " At "+ string.Format("{0,-3}", q) + " Meters ";
+				float any = 0;
+				for (int qq = 0; qq< top;qq++)
+                {
+					if (amm[qq, q] > 0)
+					{
+						any = any + amm[qq, q];
+						  txth = txth + string.Format(tform, orename[qq], amm[qq, q]) + " ";
+					}
+                }
+				if (any > 0)
+				{
+					ttx = ttx + textgra + txth + "\n\r";
+				}
+			}
+			printsc(ttx + "\n\r", true);
+			
+		
+
+
+			if (argument == "clear")
+			{
+				for (int q = 0; q < top + 1; q++)
+				{
+					for (int qq = 0; qq < 200; qq++)
+					amm[q, qq] = 0;
+				}
+			}
+
+			if(emergency > 98)
+            {
+				emergancyshutdown();
+            }
+
+
+		}  ////   end main loop  //////////////////
+
+		public void pistonspeed(float speed)
+        {
+			var pist = new List<IMyPistonBase>(); GridTerminalSystem.GetBlocksOfType<IMyPistonBase>(pist);
+
+
+			for (int q = 0; q < pist.Count; q++)
+			{
+				string piss = pist[q].DisplayNameText;
+				if (piss.Contains(buse))
+				{
+					if (pist[q].Velocity > 0)
+					{
+						pist[q].Velocity = speed;
+					}
+				}
+			}
+
+		}
+		public void pistonsfull()
+		{
+			var pist = new List<IMyPistonBase>(); GridTerminalSystem.GetBlocksOfType<IMyPistonBase>(pist);
+
+			float fulcap = 0;
+			float curcap = 0;
+			countc = 0;
+
+			for (int q = 0; q < pist.Count; q++)
+			{
+				string piss = pist[q].DisplayNameText;
+				if (piss.Contains(buse))
+				{
+					fulcap = fulcap + pist[q].HighestPosition;
+					curcap = curcap + pist[q].CurrentPosition;
+					countc++;
+				}
+			}
+
+			capc = curcap;
+			fullc = fulcap;
+
+		}
+
+
+		public string prtlinperc(float total, float amoo)
+		{
+			float d = 0;
+			float e = 0;
+			float f = 0;
+
+			if (amoo > 0)
+			{
+
+				d = total / amoo;
+				e = 100 / d;
+				f = e / 4;
+			}
+			else
+			{
+				e = 0f;
+			}
+
+			string textc =  "  [";
+			for (int q = 0; q < 25; q++)
+			{
+				if (q < (int)f)
+				{
+					textc = textc + "/";
+				}
+				else
+				{
+					textc = textc + " ";
+				}
+			}
+			if (e < 0) e = 0;
+			Echo(e.ToString());
+			if (e.ToString() == "Infinity")
+			{
+				e = 0;
+			}
+			textc = textc + "] " + string.Format("{0,3}", (int)e) + " %  ";
+
+			emergency = e;
+			return textc;
+		}
+
+
+		public void printsc(string text, bool cls)
+		{
+			var screen = new List<IMyTextPanel>(); GridTerminalSystem.GetBlocksOfType<IMyTextPanel>(screen);
+
+			for (int q = 0; q < screen.Count; q++)
+			{
+				if (screen[q].DisplayNameText.Contains(buse))
+				{
+
+					screen[q].Enabled = true;
+					screen[q].FontColor = new Color(200, 155, 155);
+					if (screen[q].DisplayNameText.Contains("Wide"))
+					{
+						screen[q].FontSize = 0.32f;
+					}
+						screen[q].ShowPublicTextOnScreen();
+					screen[q].Font = "Monospace";
+					if (cls == false)
+					{
+						screen[q].WritePublicText(text, false);  // false = Clear screen  true = no clear
+                    }
+                    else
+                    {
+						screen[q].WritePublicText(text, true);  // false = Clear screen  true = no clear
+					}
+				}
+			}
+
+		}
+		public void continersfull()
+		{
+			var cargo = new List<IMyCargoContainer>(); GridTerminalSystem.GetBlocksOfType<IMyCargoContainer>(cargo);
+
+			float fulcap = 0;
+			float curcap = 0;
+			countc = 0;
+			
+
+			for (int q = 0; q < cargo.Count; q++)
+			{
+				if (cargo[q].DisplayNameText.Contains(searchname))
+				{
+					
+					fulcap = fulcap + (float)cargo[q].GetInventory(0).MaxVolume;
+					curcap = curcap + (float)cargo[q].GetInventory(0).CurrentVolume;
+					countc++;
+				}
+			}
+			capcarg = curcap;
+			fullcarg = fulcap;
+		}
+
+		public void emergancyshutdown()
+		{
+			var pist = new List<IMyPistonBase>(); GridTerminalSystem.GetBlocksOfType<IMyPistonBase>(pist);
+			var drills = new List<IMyShipDrill>(); GridTerminalSystem.GetBlocksOfType<IMyShipDrill>(drills);
+
+			for (int q = 0; q < pist.Count; q++)
+			{
+				string piss = pist[q].DisplayNameText;
+				if (piss.Contains(buse))
+				{
+					pist[q].Retract();
+				}
+			}
+
+			for (int qq = 0; qq < drills.Count; qq++)
+			{
+				string drill = drills[qq].DisplayNameText;
+				if (drill.Contains(buse))
+				{
+					drills[qq].ApplyAction("OnOff_Off");
+				}
+			}
+		}
+
+		// THE END  ///////////////////////////////////////////////////////////////////////////////
